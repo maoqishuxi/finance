@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"database/sql"
+	"finance/writeToDatabase"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -30,35 +33,52 @@ func fetchUrl(code string, page int) ([]map[string][]byte, error) {
 
 	for i := 0; i < len(data); i += 4 {
 		result = append(result, map[string][]byte{
-			"date":                 data[i][1],
-			"unit_net_value":       data[i+1][1],
-			"cumulative_net_value": data[i+2][1],
-			"daily_growth_rate":    data[i+3][1],
+			"time":   data[i][1],
+			"valueV": data[i+1][1],
+			"valueC": data[i+2][1],
+			"gain":   data[i+3][1],
 		})
 	}
 
 	return result, nil
 }
 
-func getData() {
-	code := "000942"
-	page := 1
+func getData(code string, page int) []map[string][]byte {
+	var result []map[string][]byte
 	for i := 0; i < 5; i++ {
-		result, err := fetchUrl(code, page)
+		ret, err := fetchUrl(code, page)
 		if err == nil {
-			for _, v := range result {
-				fmt.Println(string(v["date"]))
-				fmt.Println(string(v["unit_net_value"]))
-				fmt.Println(string(v["cumulative_net_value"]))
-				fmt.Println(string(v["daily_growth_rate"]))
-			}
+			result = ret
 			break
 		}
-
+		log.Println("request over timeout")
 	}
+
+	return result
 }
 
 func main() {
+	//code := "000942"
+	//page := 1
+
 	fmt.Println("welcome to you")
-	getData()
+
+	//data := getData(code, page)
+	db, err := sql.Open("sqlite3", "./data/file.db")
+	if err != nil {
+		log.Println(err)
+	}
+	defer db.Close()
+
+	var ctx context.Context
+	var data = map[string][]byte{
+		"id":     []byte("0"),
+		"time":   []byte("2022-09-10"),
+		"valueV": []byte("2"),
+		"valueC": []byte("2"),
+		"gain":   []byte("1.0"),
+	}
+
+	//writeToDatabase.CreateTable(db, "file")
+	writeToDatabase.InsertData(db, ctx, data)
 }
