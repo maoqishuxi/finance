@@ -28,16 +28,17 @@ func CreateTable(db *sql.DB, tableName string) {
 `
 	_, err := db.Exec(fmt.Sprintf(sqlStmt, tableName))
 	if err != nil {
-		log.Println(err)
+		log.Println("createTable error: ", err)
 		return
 	}
+
 	fmt.Printf("创建%s表成功\n", tableName)
 }
 
-func QueryData(db *sql.DB, num int) []Item {
-	rows, err := db.Query("select * from file limit ?", num)
+func QueryData(db *sql.DB, tableName string, num int) []Item {
+	rows, err := db.Query(fmt.Sprintf("select * from %s limit ?", tableName), num)
 	if err != nil {
-		log.Println(err)
+		log.Println("QueryData error: ", err)
 	}
 	defer rows.Close()
 
@@ -53,22 +54,25 @@ func QueryData(db *sql.DB, num int) []Item {
 	return result
 }
 
-func QueryID(db *sql.DB) int {
-	var id int
-	row := db.QueryRow("SELECT id FROM file ORDER BY id desc LIMIT 1")
+func QueryID(db *sql.DB, tableName string) int64 {
+	var id int64
+	row := db.QueryRow(fmt.Sprintf("SELECT id FROM %s ORDER BY id desc LIMIT 1", tableName))
 	if err := row.Scan(&id); err != nil {
-		log.Printf("QueryID: %v\n", err)
+		if err == sql.ErrNoRows {
+			return 0
+		}
+		log.Println("QueryID error", err)
 	}
 
 	return id
 }
 
-func InsertData(db *sql.DB, data Item) {
-	result, err := db.Exec("INSERT INTO file VALUES (?,?,?,?,?)",
-		data.Id, data.Time, data.ValueV, data.ValueC, data.Gain)
+func InsertData(db *sql.DB, tableName string, data Item, num int64) int64 {
+	result, err := db.Exec(fmt.Sprintf("INSERT INTO %s VALUES (?,?,?,?,?)", tableName),
+		num, data.Time, data.ValueV, data.ValueC, data.Gain)
 	if err != nil {
-		log.Println(err)
-		return
+		log.Println("InsertData error: ", err)
+		return -1
 	}
 
 	id, err := result.LastInsertId()
@@ -76,5 +80,5 @@ func InsertData(db *sql.DB, data Item) {
 		log.Println(err)
 	}
 
-	fmt.Println(id)
+	return id
 }

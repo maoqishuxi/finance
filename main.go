@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"time"
 )
 
 func fetchUrl(code string, page int) ([]writeToDatabase.Item, error) {
@@ -51,33 +52,64 @@ func getData(code string, page int) []writeToDatabase.Item {
 			result = ret
 			break
 		}
-		log.Println("request over timeout")
+		log.Println("getData request over timeout")
 	}
 
 	return result
 }
 
+func UpdateData(db *sql.DB, code string, page int, tableName string) {
+	for {
+		now := time.Now()
+		next := now.Add(time.Hour * 24)
+		hour := 14
+		minute := 30
+		second := 00
+		nSecond := 00
+
+		next = time.Date(next.Year(), next.Month(), next.Day(), hour, minute, second, nSecond, next.Location())
+		t := time.NewTimer(next.Sub(now))
+		<-t.C
+		for range t.C {
+			data := getData(code, page)
+			lastID := writeToDatabase.QueryID(db, tableName)
+			id := writeToDatabase.InsertData(db, tableName, data[0], lastID+1)
+			log.Printf("插入%v数据成功\n", id)
+		}
+	}
+}
+
 func main() {
-	//code := "000942"
-	//page := 1
+	code := "159938"
+	page := 3
 	db, err := sql.Open("sqlite3", "./data/file.db")
 	if err != nil {
 		log.Println(err)
 	}
 	defer db.Close()
 
-	//data := getData(code, page)
-	//writeToDatabase.CreateTable(db, "file")
-	//for _, item := range data {
-	//	writeToDatabase.InsertData(db, item)
-	//}
+	tableName := "A" + code
 
-	//result := writeToDatabase.QueryData(db, 10)
+	writeToDatabase.CreateTable(db, tableName)
+	lastID := writeToDatabase.QueryID(db, tableName)
+	fmt.Println(lastID)
+
+	var id int64 = 0
+	for i := 1; i <= page; i++ {
+		data := getData(code, i)
+		for _, item := range data {
+			id = writeToDatabase.InsertData(db, tableName, item, lastID+id)
+			if id == -1 {
+				break
+			}
+			fmt.Println(id)
+		}
+	}
+
+	//result := writeToDatabase.QueryData(db, tableName, 10)
 	//for _, item := range result {
 	//	fmt.Println(item.Id)
 	//	fmt.Println(string(item.ValueV))
 	//	fmt.Println(string(item.Gain))
 	//}
-	//id := writeToDatabase.QueryID(db)
-	//fmt.Println(id)
 }
