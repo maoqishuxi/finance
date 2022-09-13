@@ -100,38 +100,99 @@ func InitData(db *sql.DB, tableName string, code string) {
 
 }
 
-func tradeData(gain float64) {
-
+type tradeTable struct {
+	index  []int
+	num    int
+	symbol bool
+	value  []float64
+	gain   float64
 }
 
-func Average60(db *sql.DB, tableName string) (float64, float64) {
+func Average60(db *sql.DB, tableName string) (map[string]float64, []tradeTable) {
 	result := writeToDatabase.QueryData(db, tableName, 60)
 	var sumValue, sumGain float64
-	for _, item := range result {
+	tradeData := make([]tradeTable, 60)
+	cnt := 0
+
+	for i, item := range result {
 		value, err := strconv.ParseFloat(string(item.ValueV), 64)
 		gain, err := strconv.ParseFloat(string(item.Gain)[:len(string(item.Gain))-1], 64)
 		if err != nil {
 			log.Println(err)
-			return -1, -1
+			return map[string]float64{}, []tradeTable{}
 		}
+
+		if i == 0 {
+			tradeData[cnt].symbol = true
+		} else if gain < 0 && tradeData[cnt].gain > 0 {
+			tradeData[cnt].symbol = false
+			cnt++
+		} else if gain > 0 && tradeData[cnt].gain < 0 {
+			tradeData[cnt].symbol = false
+			cnt++
+		} else {
+			tradeData[cnt].symbol = true
+		}
+
+		tradeData[cnt].index = append(tradeData[cnt].index, i)
+		tradeData[cnt].num++
+		tradeData[cnt].value = append(tradeData[cnt].value, gain)
+		tradeData[cnt].gain = gain
+
+		//fmt.Println("cnt: ", cnt)
+		//fmt.Println("gain: ", gain)
+		//fmt.Println("单项列表", tradeData[cnt])
+		//fmt.Println("...............................................................................")
 
 		sumValue += value
 		sumGain += math.Abs(gain)
 	}
 
-	return sumValue / 60, sumGain * 3 / 100 / 60
+	return map[string]float64{
+		"average60":    sumValue / 60,
+		"volatility60": sumGain * 3 / 100 / 60,
+	}, tradeData[:cnt+1]
+
+}
+
+func sendNotice(content string) {
+	url := "http://199.180.115.47:9000/nnvMFGus7GAa5evtzfJb8e/"
+	res, err := http.Get(url + content)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Println(ioutil.ReadAll(res.Body))
 }
 
 func main() {
-	code := "159938"
 	db, err := sql.Open("sqlite3", "./data/file.db")
 	if err != nil {
 		log.Println(err)
 	}
 	defer db.Close()
-	tableName := "A" + code
 
-	avgValue, avgGain := Average60(db, tableName)
-	fmt.Println(avgValue, avgGain)
+	for {
+		codes := []string{"159939", "159938", "513100", "515700"}
+		for _, code := range codes {
+			tableName := "A" + code
+			average, _ := Average60(db, tableName)
 
+			result := writeToDatabase.QueryData(db, tableName, 1)[0].ValueV
+			lastPrice, err := strconv.ParseFloat(string(result), 64)
+			if err != nil {
+				log.Println(err)
+			}
+
+			lastID := writeToDatabase.QueryID(db, code)
+			if lastID < 60 {
+				InitData(db, tableName, code)
+			}
+
+			UpdateData(db, code, 1, tableName)
+
+			if lastPrice-average["average60"] < 0 || lastPrice-average["average60"] > -0.5 {
+				sendNotice(code + "达线")
+			}
+		}
+	}
 }
