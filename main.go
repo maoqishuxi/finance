@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 )
 
@@ -79,21 +81,11 @@ func UpdateData(db *sql.DB, code string, page int, tableName string) {
 	}
 }
 
-func main() {
-	code := "159938"
-	page := 3
-	db, err := sql.Open("sqlite3", "./data/file.db")
-	if err != nil {
-		log.Println(err)
-	}
-	defer db.Close()
-
-	tableName := "A" + code
-
+func InitData(db *sql.DB, tableName string, code string) {
 	writeToDatabase.CreateTable(db, tableName)
 	lastID := writeToDatabase.QueryID(db, tableName)
-	fmt.Println(lastID)
 
+	page := 3
 	var id int64 = 0
 	for i := 1; i <= page; i++ {
 		data := getData(code, i)
@@ -106,10 +98,40 @@ func main() {
 		}
 	}
 
-	//result := writeToDatabase.QueryData(db, tableName, 10)
-	//for _, item := range result {
-	//	fmt.Println(item.Id)
-	//	fmt.Println(string(item.ValueV))
-	//	fmt.Println(string(item.Gain))
-	//}
+}
+
+func tradeData(gain float64) {
+
+}
+
+func Average60(db *sql.DB, tableName string) (float64, float64) {
+	result := writeToDatabase.QueryData(db, tableName, 60)
+	var sumValue, sumGain float64
+	for _, item := range result {
+		value, err := strconv.ParseFloat(string(item.ValueV), 64)
+		gain, err := strconv.ParseFloat(string(item.Gain)[:len(string(item.Gain))-1], 64)
+		if err != nil {
+			log.Println(err)
+			return -1, -1
+		}
+
+		sumValue += value
+		sumGain += math.Abs(gain)
+	}
+
+	return sumValue / 60, sumGain * 3 / 100 / 60
+}
+
+func main() {
+	code := "159938"
+	db, err := sql.Open("sqlite3", "./data/file.db")
+	if err != nil {
+		log.Println(err)
+	}
+	defer db.Close()
+	tableName := "A" + code
+
+	avgValue, avgGain := Average60(db, tableName)
+	fmt.Println(avgValue, avgGain)
+
 }

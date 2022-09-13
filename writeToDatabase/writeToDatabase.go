@@ -36,9 +36,10 @@ func CreateTable(db *sql.DB, tableName string) {
 }
 
 func QueryData(db *sql.DB, tableName string, num int) []Item {
-	rows, err := db.Query(fmt.Sprintf("select * from %s limit ?", tableName), num)
+	rows, err := db.Query(fmt.Sprintf("select * from %s order by id asc limit ?", tableName), num)
 	if err != nil {
 		log.Println("QueryData error: ", err)
+		return []Item{}
 	}
 	defer rows.Close()
 
